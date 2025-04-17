@@ -3,3 +3,6 @@ ccd: src/main.c
 
 clean:
 	rm bin/ccd
+
+run: test.sh
+	./test.sh
