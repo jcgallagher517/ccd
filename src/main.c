@@ -19,32 +19,26 @@ void print_help(FILE* stream, char* program) {
   fprintf(stream, "Please visit %s for full documentation.\n", help_link);
 }
 
+/* 00000000: 1111 2222 3333 4444 5555 6666 7777 8888  1234567890123456
 
-void reset_line(char line[], int offset) {
+   starts with hex offset, always eight characters
+   then colon and spaces
+   ignore this with -p flag
 
-  /* 00000000: 1111 2222 3333 4444 5555 6666 7777 8888  1234567890123456
+   then ((cols / groupsize) + (cols % groupsize)) groups
+   each with (2*grouspize) characters (except for the last one sometimes)
+   each separated by a space
 
-     starts with hex offset, always eight characters
-     then colon and spaces
-     ignore with -p flag
+   this is governed by both cols and groupsize parameters
+   if -p flag:
+   ignore groupsize
+   do not ignore cols
 
-     then ((cols / groupsize) + (cols % groupsize)) groups
-     each with (2*grouspize) characters
-     each separated by a space
+   then two spaces
+   then the (cols) characters from which the hex info comes from
+   ignore with -p flag
 
-     this is governed by both cols and groupsize parameters
-     if -p flag:
-         ignore groupsize
-         do not ignore cols
-
-     then two spaces
-     then the (cols) characters from which the hex info comes from
-     ignore with -p flag
-
-   */
-  
-  
-}
+*/
 
 int main(int argc, char* argv[]) {
 
@@ -93,6 +87,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'p':
       plain = true;
+      groupsize = 0; // change this, what if called like: ccd -p -g 2?
       break;
     case 's':
       seek = atoi(optarg);
@@ -133,34 +128,38 @@ int main(int argc, char* argv[]) {
 
   char line[LLEN];
   char buf[cols];
-  int start_idx = 10; /* first 10 spots reserved for printing off-set */
-  int ascii_idx = start_idx + (2*groupsize + 1)*(cols / groupsize) + 2; /* where to start printing ascii rep */
-  while (fread(buf, sizeof(char), cols, input)) {
+  int start_idx = (!plain) ? 10 : 0; /* reserve first 10 chars for printing off-set */
+  int n_spaces = (cols / groupsize) + ((cols % groupsize != 0) ? 1 : 0);
+  int ascii_idx = start_idx + (2*cols) + n_spaces + 1;
+  int space_count, n_elements;
 
-    // print off-set to line
+  while ((n_elements = fread(buf, sizeof(char), cols, input)) > 0) {
+
+    /* print off-set to line */
     sprintf(line, "%08hhx", seek);
     seek += cols;
     line[start_idx - 2] = ':';
     line[start_idx - 1] = ' ';
 
-    // add hex strings to line
-    for (int i = 0; i < (ascii_idx - start_idx); i += 2) {
 
-      if ((i + 1) % (2*groupsize + 1) == 0) {
-        line[start_idx + i] = ' ';
-        --i;
-        continue;
+    /* add hex strings to line */
+    space_count = 0; /* how many spaces have we passed already? */
+    for (int i = 0; i < cols + n_spaces; ++i) {
+      if ((i + 1) % (groupsize + 1) == 0) {
+        line[start_idx + 2*i - space_count] = ' ';
+        ++space_count;
+      } else if (i - space_count < n_elements) {
+        sprintf(&line[start_idx + 2*i - space_count], "%02hhx", (unsigned char)buf[i - space_count]);
       }
-
-      sprintf(&line[i + start_idx], "%02hhx", (unsigned char)buf[i]);
     }
 
-    // add two spaces before ascii representation
+    // next, if line is only partially full, I need to deliberately add spaces
+
+    /* add two spaces before ascii representation begins */
     strncpy(&line[ascii_idx - 2], "  ", 2);
 
-
-    // replace newlines with period '.'
-    for (int i = 0; i < cols; ++i) {
+    /* replace tabs and newlines with period '.' */
+    for (int i = 0; i < n_elements; ++i) {
       line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
     }
     
