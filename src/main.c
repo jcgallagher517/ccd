@@ -131,48 +131,43 @@ int main(int argc, char* argv[]) {
   }
 
 
-  /* start actual processing here */
-  char buffer[cols];
   char line[LLEN];
+  char buf[cols];
   int start_idx = 10; /* first 10 spots reserved for printing off-set */
-  int ascii_idx = 2 * (cols + cols % groupsize); /* start printing ascii rep */
+  int ascii_idx = start_idx + (2*groupsize + 1)*(cols / groupsize) + 2; /* where to start printing ascii rep */
+  while (fread(buf, sizeof(char), cols, input)) {
 
-  // read in lines with select number of columns at a time
-  while (fgets(buffer, cols, input)) {
-
-    // add offset to line, first 10 indices
-    for (int i = 0; i < start_idx - 2; ++i) {
-      line[i] = '0'; // for now, offset is just zeros, fix later
-    }
+    // print off-set to line
+    sprintf(line, "%08hhx", seek);
+    seek += cols;
     line[start_idx - 2] = ':';
     line[start_idx - 1] = ' ';
 
-    // add hex strings to line with sprintf
-    for (int i = 0; i < (ascii_idx - start_idx); ++i) {
-      if (i % groupsize  == 0) { // this condition doesn't work yet
-        line[i + start_idx] = ' ';
+    // add hex strings to line
+    for (int i = 0; i < (ascii_idx - start_idx); i += 2) {
+
+      if ((i + 1) % (2*groupsize + 1) == 0) {
+        line[start_idx + i] = ' ';
+        --i;
         continue;
       }
-      sprintf(&line[i + start_idx], "%02hhx", (unsigned char)buffer[i]);
+
+      sprintf(&line[i + start_idx], "%02hhx", (unsigned char)buf[i]);
     }
 
-    // add two spaces
+    // add two spaces before ascii representation
     strncpy(&line[ascii_idx - 2], "  ", 2);
 
-    // add actual text to line with strncpy
-    strncpy(&line[ascii_idx], buffer, sizeof(buffer));
 
+    // replace newlines with period '.'
+    for (int i = 0; i < cols; ++i) {
+      line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
+    }
+    
     // display line
     printf("%s\n", line);
 
-
-
-    break; // just do first line for now
-
-
   }
-  
-
 
 
 
