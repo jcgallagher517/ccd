@@ -1,57 +1,38 @@
 /* ccd: the hex sensor
 
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <unistd.h>
 
 #define COLS 256
 
 // which to use?
-#define LLEN ((2*(int)sizeof(unsigned long)) + 4 + (9*COLS-1) + COLS + 2)
+#define LLEN ((2 * (int)sizeof(unsigned long)) + 4 + (9 * COLS - 1) + COLS + 2)
 // #define LLEN 4096
 
-void print_help(FILE* stream, char* program) {
+void print_help(FILE *stream, char *program) {
   char help_link[] = "https://linux.die.net/man/1/xxd";
   fprintf(stream, "Usage: %s [options] [infile]\n", program);
   fprintf(stream, "Please visit %s for full documentation.\n", help_link);
 }
 
-/* 00000000: 1111 2222 3333 4444 5555 6666 7777 8888  1234567890123456
 
-   starts with hex offset, always eight characters
-   then colon and spaces
-   ignore this with -p flag
 
-   then ((cols / groupsize) + (cols % groupsize)) groups
-   each with (2*grouspize) characters (except for the last one sometimes)
-   each separated by a space
-
-   this is governed by both cols and groupsize parameters
-   if -p flag:
-   ignore groupsize
-   do not ignore cols
-
-   then two spaces
-   then the (cols) characters from which the hex info comes from
-   ignore with -p flag
-
-*/
-
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 
   /* default parameter values */
-  bool autoskip = false;   // ignore for now
-  bool bits = false;       // ignore for now
+  bool autoskip = false; // ignore for now
+  bool bits = false;     // ignore for now
   int cols = 16;
   int groupsize = 2;
-  bool include = false;    // ignore for now
+  bool include = false; // ignore for now
   int len = EOF;
   bool plain = false;
   int seek = 0;
-  bool uppercase = false;  // ignore for now
+  bool uppercase = false; // ignore for now
 
   /* parse cli args */
   /* atoi can be unsafe for invalid inputs, consider using strtol instead */
@@ -125,13 +106,12 @@ int main(int argc, char* argv[]) {
     input = stdin;
   }
 
-
   char line[LLEN];
   char buf[cols];
   int start_idx = (!plain) ? 10 : 0; /* reserve first 10 chars for printing off-set */
   int n_spaces = (cols / groupsize) + ((cols % groupsize != 0) ? 1 : 0);
-  int ascii_idx = start_idx + (2*cols) + n_spaces + 1;
-  int space_count, n_elements;
+  int ascii_idx = start_idx + (2 * cols) + n_spaces + 1;
+  int space_count, n_elements, current_idx;
 
   while ((n_elements = fread(buf, sizeof(char), cols, input)) > 0) {
 
@@ -141,34 +121,39 @@ int main(int argc, char* argv[]) {
     line[start_idx - 2] = ':';
     line[start_idx - 1] = ' ';
 
-
     /* add hex strings to line */
     space_count = 0; /* how many spaces have we passed already? */
     for (int i = 0; i < cols + n_spaces; ++i) {
+      current_idx = start_idx + 2 * i - space_count;
       if ((i + 1) % (groupsize + 1) == 0) {
-        line[start_idx + 2*i - space_count] = ' ';
+        line[current_idx] = ' ';
         ++space_count;
       } else if (i - space_count < n_elements) {
-        sprintf(&line[start_idx + 2*i - space_count], "%02hhx", (unsigned char)buf[i - space_count]);
+        sprintf(&line[current_idx], "%02hhx",
+                (unsigned char)buf[i - space_count]);
+      } else {
+        --current_idx;
+        break;
       }
     }
 
-    // next, if line is only partially full, I need to deliberately add spaces
-
-    /* add two spaces before ascii representation begins */
-    strncpy(&line[ascii_idx - 2], "  ", 2);
+    /* add spaces up to ascii index */
+    for (int i = ascii_idx - 1; i > current_idx; --i) {
+      line[i] = ' ';
+    }
 
     /* replace tabs and newlines with period '.' */
-    for (int i = 0; i < n_elements; ++i) {
-      line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
+    for (int i = 0; i < cols; ++i) {
+      if (i < n_elements) {
+        line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
+      } else {
+        line[ascii_idx + i] = ' ';
+      }
     }
-    
+
     // display line
     printf("%s\n", line);
-
   }
-
-
 
   if (input != stdin) {
     fclose(input);
