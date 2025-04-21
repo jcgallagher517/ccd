@@ -19,6 +19,8 @@ void print_help(FILE *stream, char *program) {
   fprintf(stream, "Please visit %s for full documentation.\n", help_link);
 }
 
+/* print hex dump of buf */
+void print_hd(char line[], char buf[], int n_elements, int cols, int groupsize);
 
 
 int main(int argc, char *argv[]) {
@@ -68,7 +70,6 @@ int main(int argc, char *argv[]) {
       break;
     case 'p':
       plain = true;
-      groupsize = 0; // change this, what if called like: ccd -p -g 2?
       break;
     case 's':
       seek = atoi(optarg);
@@ -106,57 +107,85 @@ int main(int argc, char *argv[]) {
     input = stdin;
   }
 
+  /* main processing comes next, try and abstract this into a function */
+
   char line[LLEN];
   char buf[cols];
-  int start_idx = (!plain) ? 10 : 0; /* reserve first 10 chars for printing off-set */
+  int n_elements;
+
+  // all this stuff only needed if -p flag NOT passed
+  // int start_idx = (!plain) ? 10 : 0; /* reserve first 10 chars for printing off-set */
+  int start_idx = 10;
   int n_spaces = (cols / groupsize) + ((cols % groupsize != 0) ? 1 : 0);
   int ascii_idx = start_idx + (2 * cols) + n_spaces + 1;
-  int space_count, n_elements, current_idx;
+  int space_count, current_idx;
 
+  // start by reading up to first seek elements
+  for (int i = 0; i < seek; ++i) {
+    fgetc(input);
+  }
+
+  // then loop over what is left
   while ((n_elements = fread(buf, sizeof(char), cols, input)) > 0) {
 
-    /* print off-set to line */
-    sprintf(line, "%08hhx", seek);
-    seek += cols;
-    line[start_idx - 2] = ':';
-    line[start_idx - 1] = ' ';
+    if (!plain) {
 
-    /* add hex strings to line */
-    space_count = 0; /* how many spaces have we passed already? */
-    for (int i = 0; i < cols + n_spaces; ++i) {
-      current_idx = start_idx + 2 * i - space_count;
-      if ((i + 1) % (groupsize + 1) == 0) {
-        line[current_idx] = ' ';
-        ++space_count;
-      } else if (i - space_count < n_elements) {
-        sprintf(&line[current_idx], "%02hhx",
-                (unsigned char)buf[i - space_count]);
-      } else {
-        --current_idx;
-        break;
+      /* print off-set to line */
+      sprintf(line, "%08hhx", seek);
+      seek += cols;
+      line[start_idx - 2] = ':';
+      line[start_idx - 1] = ' ';
+
+      /* add hex strings to line */
+      space_count = 0; /* how many spaces have we passed already? */
+      for (int i = 0; i < cols + n_spaces; ++i) {
+        current_idx = start_idx + 2 * i - space_count;
+        if ((i + 1) % (groupsize + 1) == 0) {
+          line[current_idx] = ' ';
+          ++space_count;
+        } else if (i - space_count < n_elements) {
+          sprintf(&line[current_idx], "%02hhx",
+                  (unsigned char)buf[i - space_count]);
+        } else {
+          --current_idx;
+          break;
+        }
       }
-    }
 
-    /* add spaces up to ascii index */
-    for (int i = ascii_idx - 1; i > current_idx; --i) {
-      line[i] = ' ';
-    }
-
-    /* replace tabs and newlines with period '.' */
-    for (int i = 0; i < cols; ++i) {
-      if (i < n_elements) {
-        line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
-      } else {
-        line[ascii_idx + i] = ' ';
+      /* add spaces up to ascii index */
+      for (int i = ascii_idx - 1; i > current_idx; --i) {
+        line[i] = ' ';
       }
+
+      /* replace tabs and newlines with period '.' */
+      for (int i = 0; i < cols; ++i) {
+        if (i < n_elements) {
+          line[ascii_idx + i] = (buf[i] == '\n' || buf[i] == '\t') ? '.' : buf[i];
+        } else {
+          line[ascii_idx + i] = ' ';
+        }
+      }
+
+    } else { /* if output is plain */
+
+      for (int i = 0; i < n_elements; ++i) {
+        sprintf(&line[2*i], "%02hhx", (unsigned char)buf[i]);
+      }
+
     }
 
     // display line
     printf("%s\n", line);
   }
 
+
   if (input != stdin) {
     fclose(input);
   }
   return EXIT_SUCCESS;
 }
+
+
+// void print_hd(char line[], char buf[], int n_elements, int cols, int groupsize) {
+// 
+// }
