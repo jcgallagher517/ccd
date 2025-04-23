@@ -8,10 +8,7 @@
 #include <unistd.h>
 
 #define COLS 256
-
-// which to use?
-#define LLEN ((2 * (int)sizeof(unsigned long)) + 4 + (9 * COLS - 1) + COLS + 2)
-// #define LLEN 4096
+#define LLEN 4096
 
 void print_help(FILE *stream, char *program) {
   char help_link[] = "https://linux.die.net/man/1/xxd";
@@ -26,15 +23,15 @@ void print_hd(char line[], char buf[], int n_elements, int seek, int cols, int g
 int main(int argc, char *argv[]) {
 
   /* default parameter values */
-  bool autoskip = false; // ignore for now
-  bool bits = false;     // ignore for now
+  bool autoskip = false;
+  bool bits = false;
   int cols = 16;
   int groupsize = 2;
-  bool include = false; // ignore for now
+  bool include = false;
   int len = EOF;
   bool plain = false;
   int seek = 0;
-  bool uppercase = false; // ignore for now
+  bool uppercase = false;
 
   /* parse cli args */
   /* atoi can be unsafe for invalid inputs, consider using strtol instead */
@@ -115,18 +112,22 @@ int main(int argc, char *argv[]) {
   /* then loop over what is left */
   char line[LLEN];
   char buf[cols];
-  int n_elements;
+  int n_elements, start_idx = 10;
   while ((n_elements = fread(buf, sizeof(char), cols, input)) > 0) {
 
     if (!plain) {
-      print_hd(line, buf, n_elements, seek, cols, groupsize);
+      /* print off-set up-to start_idx */
+      sprintf(line, "%08hhx", seek);
+      line[start_idx - 2] = ':';
+      line[start_idx - 1] = ' ';
+      print_hd(&line[start_idx], buf, n_elements, seek, cols, groupsize);
+      seek += n_elements;
     } else {
       for (int i = 0; i < n_elements; ++i) {
         sprintf(&line[2*i], "%02hhx", (unsigned char)buf[i]);
       }
     }
 
-    // display line
     printf("%s\n", line);
   }
 
@@ -139,24 +140,16 @@ int main(int argc, char *argv[]) {
 
 
 
-
 void print_hd(char line[], char buf[], int n_elements, int seek, int cols, int groupsize) {
 
-  int start_idx = 10;
   int n_spaces = (cols / groupsize) + ((cols % groupsize != 0) ? 1 : 0);
-  int ascii_idx = start_idx + (2 * cols) + n_spaces + 1;
+  int ascii_idx = (2 * cols) + n_spaces + 1;
   int space_count, current_idx;
 
-  /* print off-set to line */
-  sprintf(line, "%08hhx", seek);
-  seek += cols;
-  line[start_idx - 2] = ':';
-  line[start_idx - 1] = ' ';
-  
   /* add hex strings to line */
   space_count = 0; /* how many spaces have we passed already? */
   for (int i = 0; i < cols + n_spaces; ++i) {
-    current_idx = start_idx + 2 * i - space_count;
+    current_idx = 2 * i - space_count;
     if ((i + 1) % (groupsize + 1) == 0) {
       line[current_idx] = ' ';
       ++space_count;
