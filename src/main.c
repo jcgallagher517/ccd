@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #define COLS 256
 #define LLEN 4096
@@ -21,6 +22,24 @@ void print_hd(char line[], char buf[], int n_elements, int seek, int cols, int g
 
 
 int main(int argc, char *argv[]) {
+
+  /* add cli args over time
+
+     DONE:
+     cols
+     grouspize
+     seek
+     plain
+     len
+
+     TODO IMMEDIATELY:
+     uppercase
+
+     TODO LATER:
+     autoskip
+     bits
+     include
+   */
 
   /* default parameter values */
   bool autoskip = false;
@@ -109,11 +128,17 @@ int main(int argc, char *argv[]) {
     fgetc(input);
   }
 
-  /* then loop over what is left */
   char line[LLEN];
   char buf[cols];
   int n_elements, start_idx = 10;
+  len = (len == EOF) ? INT_MAX : len;
+
   while ((n_elements = fread(buf, sizeof(char), cols, input)) > 0) {
+
+    len -= n_elements;
+    if (len < 0) {
+      n_elements -= abs(len);
+    }
 
     if (!plain) {
       /* print off-set up-to start_idx */
@@ -129,6 +154,9 @@ int main(int argc, char *argv[]) {
     }
 
     printf("%s\n", line);
+    if (len < 0) {
+      break;
+    }
   }
 
 
